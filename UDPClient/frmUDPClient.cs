@@ -1,14 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-
-using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -31,12 +21,20 @@ namespace UDPClient
         {
             try
             {
-                serverEndPoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9000);
-                lstData.Items.Add("Đã kết nối đến Server (UDP).");
+                serverEndPoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9000); // Địa chỉ IP của Server
+                lstData.Items.Add("Đang kết nối với Server (UDP)...");
+
+                // Gửi thông báo kết nối đến Server
+                string connectionMessage = "Client đã kết nối!";
+                byte[] data = Encoding.UTF8.GetBytes(connectionMessage);
+                udpClient.Send(data, data.Length, serverEndPoint);
+
+                // Bắt đầu lắng nghe phản hồi từ Server
+                udpClient.BeginReceive(new AsyncCallback(ReceiveCallback), null);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Lỗi khi kết nối đến server: {ex.Message}");
+                MessageBox.Show($"Lỗi khi kết nối đến Server: {ex.Message}");
             }
         }
 
@@ -46,33 +44,54 @@ namespace UDPClient
             {
                 if (serverEndPoint == null)
                 {
-                    MessageBox.Show("Vui lòng kết nối đến server trước.");
+                    MessageBox.Show("Vui lòng kết nối đến Server trước.");
                     return;
                 }
 
-                // Gửi dữ liệu đến server
+                // Gửi tin nhắn đến Server
                 string messageToSend = txtDataSending.Text.Trim();
                 byte[] data = Encoding.UTF8.GetBytes(messageToSend);
                 udpClient.Send(data, data.Length, serverEndPoint);
 
-                // Hiển thị tin nhắn đã gửi
-                lstData.Items.Add("Bạn: " + messageToSend);
+                lstData.Items.Add("Bạn: " + messageToSend); // Hiển thị tin nhắn gửi đi
                 txtDataSending.Clear();
-
-                // Nhận phản hồi từ server
-                var serverResponse = udpClient.Receive(ref serverEndPoint);
-                string responseMessage = Encoding.UTF8.GetString(serverResponse);
-                lstData.Items.Add("Server: " + responseMessage);
-
-                if (messageToSend.Equals("Thoát", StringComparison.OrdinalIgnoreCase))
-                {
-                    MessageBox.Show("Kết nối đã đóng.");
-                    Application.Exit();
-                }
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Lỗi khi gửi tin nhắn: {ex.Message}");
+            }
+        }
+
+        private void ReceiveCallback(IAsyncResult ar)
+        {
+            try
+            {
+                byte[] receivedData = udpClient.EndReceive(ar, ref serverEndPoint);
+                string receivedMessage = Encoding.UTF8.GetString(receivedData);
+
+                // Hiển thị tin nhắn từ Server
+                this.Invoke((MethodInvoker)delegate
+                {
+                    if (receivedMessage.Contains("Client đã kết nối thành công!"))
+                    {
+                        lstData.Items.Add("Server: " + receivedMessage);
+                        lstData.Items.Add("Kết nối thành công đến Server!");
+                    }
+                    else
+                    {
+                        lstData.Items.Add("Server: " + receivedMessage);
+                    }
+                });
+
+                // Tiếp tục lắng nghe tin nhắn khác
+                udpClient.BeginReceive(new AsyncCallback(ReceiveCallback), null);
+            }
+            catch (Exception ex)
+            {
+                this.Invoke((MethodInvoker)delegate
+                {
+                    lstData.Items.Add($"Lỗi: {ex.Message}");
+                });
             }
         }
     }

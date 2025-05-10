@@ -1,14 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-
-using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -19,7 +9,7 @@ namespace UDPServer
     public partial class frmUDPServer : Form
     {
         private UdpClient udpServer;
-        private IPEndPoint endPoint;
+        private IPEndPoint clientEndPoint;
 
         public frmUDPServer()
         {
@@ -30,16 +20,16 @@ namespace UDPServer
         {
             try
             {
-                udpServer = new UdpClient(9000);
-                endPoint = new IPEndPoint(IPAddress.Any, 9000);
-                lstData.Items.Add("Server đang chạy...");
+                udpServer = new UdpClient(9000); // Khởi động Server trên cổng 9000
+                clientEndPoint = new IPEndPoint(IPAddress.Any, 0); // Lắng nghe từ bất kỳ địa chỉ nào
+                lstData.Items.Add("Server đang chạy và lắng nghe...");
 
                 // Lắng nghe tin nhắn từ Client
                 udpServer.BeginReceive(new AsyncCallback(ReceiveCallback), null);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Lỗi khi khởi động server: {ex.Message}");
+                MessageBox.Show($"Lỗi khi khởi động Server: {ex.Message}");
             }
         }
 
@@ -47,17 +37,22 @@ namespace UDPServer
         {
             try
             {
-                byte[] receivedData = udpServer.EndReceive(ar, ref endPoint);
+                byte[] receivedData = udpServer.EndReceive(ar, ref clientEndPoint);
                 string receivedMessage = Encoding.UTF8.GetString(receivedData);
+
+                // Hiển thị tin nhắn nhận được từ Client
                 this.Invoke((MethodInvoker)delegate
                 {
-                    lstData.Items.Add($"Client: {receivedMessage}");
+                    lstData.Items.Add($"Client ({clientEndPoint.Address}): {receivedMessage}");
                 });
 
-                // Phản hồi lại Client
-                string responseMessage = receivedMessage.ToUpper();
-                byte[] responseData = Encoding.UTF8.GetBytes(responseMessage);
-                udpServer.Send(responseData, responseData.Length, endPoint);
+                // Kiểm tra tin nhắn từ Client để xác nhận kết nối
+                if (receivedMessage == "Client đã kết nối!")
+                {
+                    string connectionMessage = "Client đã kết nối thành công!";
+                    byte[] data = Encoding.UTF8.GetBytes(connectionMessage);
+                    udpServer.Send(data, data.Length, clientEndPoint); // Gửi phản hồi xác nhận đến Client
+                }
 
                 // Tiếp tục lắng nghe
                 udpServer.BeginReceive(new AsyncCallback(ReceiveCallback), null);
@@ -68,6 +63,29 @@ namespace UDPServer
                 {
                     lstData.Items.Add($"Lỗi: {ex.Message}");
                 });
+            }
+        }
+
+        private void btnSendToClient_Click(object sender, EventArgs e)
+        {
+            if (clientEndPoint == null)
+            {
+                MessageBox.Show("Chưa có Client kết nối!");
+                return;
+            }
+
+            try
+            {
+                string messageToSend = txtDataToSend.Text.Trim();
+                byte[] data = Encoding.UTF8.GetBytes(messageToSend);
+                udpServer.Send(data, data.Length, clientEndPoint);
+
+                lstData.Items.Add($"Server: {messageToSend}");
+                txtDataToSend.Clear();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Lỗi khi gửi tin nhắn: {ex.Message}");
             }
         }
     }
